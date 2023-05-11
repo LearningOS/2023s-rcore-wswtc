@@ -29,19 +29,25 @@ static USER_STACK: UserStack = UserStack {
 };
 
 impl KernelStack {
+    // 获取内核栈的栈顶指针，即栈顶指针 + 栈大小
     fn get_sp(&self) -> usize {
         self.data.as_ptr() as usize + KERNEL_STACK_SIZE
     }
+    // 将上下文信息保存到内核栈，返回可变的上下文引用
     pub fn push_context(&self, cx: TrapContext) -> &'static mut TrapContext {
+        // 计算上下文信息在内核栈中的地址
         let cx_ptr = (self.get_sp() - core::mem::size_of::<TrapContext>()) as *mut TrapContext;
+        // 计算上下文信息在内核栈中的地址   
         unsafe {
             *cx_ptr = cx;
         }
+        // 返回可变的上下文引用
         unsafe { cx_ptr.as_mut().unwrap() }
     }
 }
 
 impl UserStack {
+    // 获取用户栈栈顶地址
     fn get_sp(&self) -> usize {
         self.data.as_ptr() as usize + USER_STACK_SIZE
     }
