@@ -64,7 +64,7 @@ lazy_static! {
             // start_time: 0,                               //
             task_info_inner: TaskInfoInner {
                 syscall_times: [0; MAX_SYSCALL_NUM],
-        start_time: 0,
+            start_time: 0,
             },
             task_status: TaskStatus::UnInit,
         }; MAX_APP_NUM];
