@@ -125,7 +125,31 @@ impl From<VirtPageNum> for VirtAddr {
         Self(v.0 << PAGE_SIZE_BITS)
     }
 }
+// 实现 BitOr trait
+impl core::ops::BitOr<usize> for PhysPageNum {
+    type Output = PhysPageNum;
+
+    fn bitor(self, rhs: usize) -> Self::Output {
+        PhysPageNum(self.0 | rhs)
+    }
+}
+// 实现 Shl trait
+impl core::ops::Shl<usize> for PhysPageNum {
+    type Output = PhysPageNum;
+
+    fn shl(self, rhs: usize) -> Self::Output {
+        PhysPageNum(self.0 << rhs)
+    }
+}
 impl PhysAddr {
+    ///lab4
+    pub fn combine(ppn: PhysPageNum, offset: usize) -> PhysAddr {
+        // 
+        let phys_addr = (ppn<< 12) | offset;
+        let value: usize = usize::from(phys_addr);
+        PhysAddr(value)
+    }
+
     /// Get the (floor) physical page number
     pub fn floor(&self) -> PhysPageNum {
         PhysPageNum(self.0 / PAGE_SIZE)

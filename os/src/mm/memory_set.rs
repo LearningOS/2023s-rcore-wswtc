@@ -262,6 +262,36 @@ impl MemorySet {
             false
         }
     }
+    /// lab4 add
+    pub fn find_vpn(&self, vpn: VirtPageNum) -> bool{
+        self.page_table.find_vpn(vpn)
+    }
+    /// lab4 add
+    pub fn munmap(&mut self, vpn: VirtPageNum){
+        self.areas[0].unmap_one(&mut self.page_table, vpn);
+    }
+
+    // TODO improve bruteforce munmap add
+    pub fn remove_mapped_frames(&mut self, start_va: VirtAddr, end_va: VirtAddr) -> isize {
+        // make sure the vpn is belong to current MemorySet
+        for vpn in VPNRange::new(start_va.floor(), end_va.ceil()) {
+            if let None = self.areas.iter()
+            .position(|area| area.data_frames.contains_key(&vpn)) {
+                return -1;
+            }
+        }
+        // drop the MapAreas in a bruteforce way
+        for vpn in VPNRange::new(start_va.floor(), end_va.ceil())  {
+            let index = self.areas.iter()
+                .position(|area| area.data_frames.contains_key(&vpn)).unwrap();
+            self.areas[index].unmap_one(&mut self.page_table, vpn);
+            self.areas[index].data_frames.remove(&vpn);
+            if self.areas[index].data_frames.is_empty() {
+                self.areas.remove(index);
+            }
+        }
+        0
+    }
 }
 /// map area structure, controls a contiguous piece of virtual memory
 pub struct MapArea {
@@ -410,3 +440,4 @@ pub fn remap_test() {
         .executable(),);
     println!("remap_test passed!");
 }
+
