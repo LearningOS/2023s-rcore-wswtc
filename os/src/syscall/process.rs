@@ -23,6 +23,8 @@ use crate::mm::page_table::PageTable;
 use crate::config::PAGE_SIZE;
 use crate::mm::VPNRange;
 use crate::mm::MapPermission;
+use crate::mm::VirtPageNum;
+use crate::mm::memory_set;
 /// Task information
 #[allow(dead_code)]
 pub struct TaskInfo {
@@ -85,7 +87,6 @@ pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
 
 // YOUR JOB: Implement mmap.
 pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
-    trace!("kernel: sys_mmap NOT IMPLEMENTED YET!");
     //mmap(_start,_len,_port)
     if (start & (PAGE_SIZE - 1)) != 0 
         || (port & !0x7) != 0
@@ -94,13 +95,16 @@ pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
     }
 
     let len = ( (len + PAGE_SIZE - 1) / PAGE_SIZE ) * PAGE_SIZE;
+    println!("len  isisisisissisisisisisisissis: {:?}", len);
     let start_vpn =  VirtAddr::from(start).floor();
-    let end_vpn =  VirtAddr::from(start + len).ceil();
-    
+    let end_vpn =  VirtAddr::from(start + len -1).floor();
+    println!("startVPN isisisisissisisisisisisissis: {:?}", start_vpn);
+    println!("endVPN isisisissisisisisisisisisisisi: {:?}", end_vpn);
     let page_table_user = PageTable::from_token(current_user_token());
     // make sure there are no mapped pages in [start..start+len)
-    for vpn in VPNRange::new(start_vpn, end_vpn) {
+    for vpn in VPNRange::new(start_vpn, end_vpn ) {
         if let Some(_) = page_table_user.translate(vpn) {
+            println!("VPN is already mapped: {:?}", vpn);
             return -1;
         }
     }
