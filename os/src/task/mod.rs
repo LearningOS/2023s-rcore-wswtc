@@ -359,6 +359,10 @@ impl TaskManager {
     }
 }
 
+pub fn task_map(start: usize, len: usize, port: usize) -> isize{
+    TASK_MANAGER.task_map(start, len, port)
+}
+
 pub fn current_id() -> usize {
     TASK_MANAGER.get_current_id()
 }

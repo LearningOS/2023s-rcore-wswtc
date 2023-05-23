@@ -2,7 +2,7 @@
 use crate::{
     config::MAX_SYSCALL_NUM,
     task::{
-        change_program_brk, exit_current_and_run_next, suspend_current_and_run_next, TaskStatus,mmap,munmap,current_memory_set_munmap,current_memory_set_mmap,current_id,
+        change_program_brk, exit_current_and_run_next, suspend_current_and_run_next, TaskStatus,mmap,munmap,current_memory_set_munmap,current_memory_set_mmap,current_id,task_map,
     },
 };
 use crate::task::get_task_info;
@@ -88,48 +88,48 @@ pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
 
 // YOUR JOB: Implement mmap.
 pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
-    //mmap(_start,_len,_port)
-    if (start & (PAGE_SIZE - 1)) != 0 
-        || (port & !0x7) != 0
-        || (port & 0x7) == 0 {
-        return -1;
-    }
+    task_map(start,len,port)
+    // if (start & (PAGE_SIZE - 1)) != 0 
+    //     || (port & !0x7) != 0
+    //     || (port & 0x7) == 0 {
+    //     return -1;
+    // }
 
-    let len = ( (len + PAGE_SIZE - 1) / PAGE_SIZE ) * PAGE_SIZE;
-    println!("current_id is :{:?}       len is: {:?}",current_id(), len);
-    let start_vpn =  VirtAddr::from(start).floor();
-    let end_vpn =  VirtAddr::from(start + len - 4095).floor();
-    println!("current_id is :{:?}       startVPN is: {:?}",current_id(), start_vpn);
-    println!("current_id is :{:?}       endVPN is: {:?}",current_id(), end_vpn);
-    let page_table_user = PageTable::from_token(current_user_token());
-    // make sure there are no mapped pages in [start..start+len)
-    for vpn in VPNRange::new(start_vpn, end_vpn ) {
-        if let Some(_) = page_table_user.translate(vpn) {
-            println!("VPN is already mapped: {:?}", vpn);
-            return -1;
-        }
-    }
-    let mut map_perm = MapPermission::U;
-    if (port & 0x1) != 0 {
-        map_perm |= MapPermission::R;
-    }
-    if (port & 0x2) !=0 {
-        map_perm |= MapPermission::W;
-    }
-    if (port & 0x4) !=0 {
-        map_perm |= MapPermission::X;
-    }
+    // let len = ( (len + PAGE_SIZE - 1) / PAGE_SIZE ) * PAGE_SIZE;
+    // println!("current_id is :{:?}       len is: {:?}",current_id(), len);
+    // let start_vpn =  VirtAddr::from(start).floor();
+    // let end_vpn =  VirtAddr::from(start + len - 4095).floor();
+    // println!("current_id is :{:?}       startVPN is: {:?}",current_id(), start_vpn);
+    // println!("current_id is :{:?}       endVPN is: {:?}",current_id(), end_vpn);
+    // let page_table_user = PageTable::from_token(current_user_token());
+    // // make sure there are no mapped pages in [start..start+len)
+    // for vpn in VPNRange::new(start_vpn, end_vpn ) {
+    //     if let Some(_) = page_table_user.translate(vpn) {
+    //         println!("VPN is already mapped: {:?}", vpn);
+    //         return -1;
+    //     }
+    // }
+    // let mut map_perm = MapPermission::U;
+    // if (port & 0x1) != 0 {
+    //     map_perm |= MapPermission::R;
+    // }
+    // if (port & 0x2) !=0 {
+    //     map_perm |= MapPermission::W;
+    // }
+    // if (port & 0x4) !=0 {
+    //     map_perm |= MapPermission::X;
+    // }
 
-    match current_memory_set_mmap(
-        VirtAddr::from(start), 
-        VirtAddr::from(start + len), 
-        map_perm) {
-            Ok(_) => 0,
-            Err(e) => {
-                error!("[Kernel]: mmap error {}, task id={}", e, current_id());
-                -1
-            }
-    }
+    // match current_memory_set_mmap(
+    //     VirtAddr::from(start), 
+    //     VirtAddr::from(start + len), 
+    //     map_perm) {
+    //         Ok(_) => 0,
+    //         Err(e) => {
+    //             error!("[Kernel]: mmap error {}, task id={}", e, current_id());
+    //             -1
+    //         }
+    // }
 }
 
 // YOUR JOB: Implement munmap.
