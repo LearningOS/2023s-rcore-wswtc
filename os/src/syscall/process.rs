@@ -7,6 +7,7 @@ use crate::{
 };
 use crate::task::get_task_info;
 
+pub use crate::mm::memory_set::MemorySet;
 #[repr(C)]
 #[derive(Debug)]
 pub struct TimeVal {
@@ -95,11 +96,11 @@ pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
     }
 
     let len = ( (len + PAGE_SIZE - 1) / PAGE_SIZE ) * PAGE_SIZE;
-    println!("len  isisisisissisisisisisisissis: {:?}", len);
+    println!("current_id is :{:?}       len is: {:?}",current_id(), len);
     let start_vpn =  VirtAddr::from(start).floor();
-    let end_vpn =  VirtAddr::from(start + len -1).floor();
-    println!("startVPN isisisisissisisisisisisissis: {:?}", start_vpn);
-    println!("endVPN isisisissisisisisisisisisisisi: {:?}", end_vpn);
+    let end_vpn =  VirtAddr::from(start + len - 4095).floor();
+    println!("current_id is :{:?}       startVPN is: {:?}",current_id(), start_vpn);
+    println!("current_id is :{:?}       endVPN is: {:?}",current_id(), end_vpn);
     let page_table_user = PageTable::from_token(current_user_token());
     // make sure there are no mapped pages in [start..start+len)
     for vpn in VPNRange::new(start_vpn, end_vpn ) {
@@ -141,12 +142,14 @@ pub fn sys_munmap(start: usize, len: usize) -> isize {
 
     let len = ( (len + PAGE_SIZE - 1) / PAGE_SIZE ) * PAGE_SIZE;
     let start_vpn =  VirtAddr::from(start).floor();
-    let end_vpn =  VirtAddr::from(start + len).ceil();
-
+    let end_vpn =  VirtAddr::from(start + len - 4095).floor();
+    println!("current_id is :{:?}   unmap startVPN is: {:?}",current_id(), start_vpn);
+    println!("current_id is :{:?}   unmap endVPN is: {:?}",current_id(), end_vpn);
     let page_table_user = PageTable::from_token(current_user_token());
     // make sure there are no unmapped pages in [start..start+len)
     for vpn in VPNRange::new(start_vpn, end_vpn) {
         if let None = page_table_user.translate(vpn) {
+            println!("there are no unmapped pages {:?}", vpn);
             return -1;
         }
     }
