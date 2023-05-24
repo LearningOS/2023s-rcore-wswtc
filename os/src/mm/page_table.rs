@@ -147,13 +147,13 @@ impl PageTable {
     pub fn token(&self) -> usize {
         8usize << 60 | self.root_ppn.0
     }
-    /// lab4 add
-    pub fn find_vpn(&self, vpn: VirtPageNum) -> bool{
-        match self.find_pte(vpn){
-            None => false,
-            Some(x)=> x.is_valid(),
-        }
-    } 
+    // /// lab4 add
+    // pub fn find_vpn(&self, vpn: VirtPageNum) -> bool{
+    //     match self.find_pte(vpn){
+    //         None => false,
+    //         Some(x)=> x.is_valid(),
+    //     }
+    // } 
 }
 
 /// Translate&Copy a ptr[u8] array with LENGTH len to a mutable u8 Vec through page table

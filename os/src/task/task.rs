@@ -6,7 +6,6 @@ use crate::mm::{
 };
 use crate::trap::{trap_handler, TrapContext};
 use crate::config::MAX_SYSCALL_NUM;
-
 /// The task control block (TCB) of a task.
 pub struct TaskControlBlock {
     /// Save task context
@@ -30,7 +29,7 @@ pub struct TaskControlBlock {
     /// Program break
     pub program_brk: usize,
 
-    ///lab3 add
+    /// lab3 add
     pub task_info_inner: TaskInfoInner,
 }
 
@@ -59,12 +58,11 @@ impl TaskControlBlock {
             kernel_stack_top.into(),
             MapPermission::R | MapPermission::W,
         );
-
+        // lab4 add
         let task_info = TaskInfoInner {
             syscall_times: [0; MAX_SYSCALL_NUM],
             start_time:0,
         };
-
         let task_control_block = Self {
             task_status,
             task_cx: TaskContext::goto_trap_return(kernel_stack_top),

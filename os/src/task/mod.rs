@@ -14,6 +14,8 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
+use crate::mm::VPNRange;
+//
 use crate::timer::get_time_ms;
 use crate::task::task::TaskInfoInner;
 use crate::syscall::process::TaskInfo;
@@ -21,7 +23,8 @@ pub use crate::mm::memory_set::{kernel_stack_position, MapPermission, MemorySet,
 use crate::mm::VirtPageNum;
 use crate::mm::VirtAddr;
 use crate::config::PAGE_SIZE;
-use crate::mm::VPNRange;
+//use crate::mm::VPNRange;
+//
 use crate::loader::{get_app_data, get_num_app};
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
@@ -51,9 +54,9 @@ pub struct TaskManager {
 /// The task manager inner in 'UPSafeCell'
 struct TaskManagerInner {
     /// task list
-    pub tasks: Vec<TaskControlBlock>,
+    tasks: Vec<TaskControlBlock>,
     /// id of current `Running` task
-    pub current_task: usize,
+    current_task: usize,
 }
 
 lazy_static! {
@@ -161,13 +164,13 @@ impl TaskManager {
             panic!("All applications completed!");
         }
     }
-
+    /// lab4 add 
     fn set_syscall_times(&self, syscall_id: usize) {
         let mut inner = self.inner.exclusive_access();
         let current_id = inner.current_task;
         inner.tasks[current_id].task_info_inner.syscall_times[syscall_id] += 1;
     }
-
+    /// lab4 add
     fn get_current_task_info(&self, ti: *mut TaskInfo) {
         let inner = self.inner.exclusive_access();
         let current_id = inner.current_task;
@@ -181,94 +184,7 @@ impl TaskManager {
             };
         }
     }
-    fn mmap(&self, start: usize, len: usize, port: usize) -> isize {
-        if len == 0 {
-            return 0;
-        }
-        if len > 1073741824{
-            return -1;
-        }
-        if start % 4096 != 0 {
-            return -1;
-        }
-        let mut length = len;
-        if len % 4096 != 0 {
-            length = len + (4096 - len % 4096);
-        }
-        if (port & !0x7 != 0) || (port & 0x7 == 0) {
-            return -1;
-        }
-        
-        // println!("@");
-        let mut inner = self.inner.exclusive_access();
-        let current = inner.current_task;
-        // println!("Start : {:#X}", VirtPageNum::from(start/4096).0);
-        let from:usize = start / 4096;
-        let to:usize = (start + length) / 4096;
-        // println!("from to {} {}", from, to);
-        for vpn in from..to {
-            if true == inner.tasks[current].memory_set.find_vpn(VirtPageNum::from(vpn)) {
-                return -1;
-            }
-        }
-        
-        let permission = match port {
-            1 => MapPermission::U | MapPermission::R,
-            2 => MapPermission::U | MapPermission::W,
-            3 => MapPermission::U | MapPermission::R | MapPermission::W,
-            4 => MapPermission::U | MapPermission::X,
-            5 => MapPermission::U | MapPermission::R | MapPermission::X,
-            6 => MapPermission::U | MapPermission::X | MapPermission::W,
-            _ => MapPermission::U | MapPermission::R | MapPermission::W | MapPermission::X,
-        };
-
-        inner.tasks[current].memory_set.insert_framed_area(VirtAddr::from(start), VirtAddr::from(start+length), permission);
-
-        for vpn in from..to {
-            if false == inner.tasks[current].memory_set.find_vpn(VirtPageNum::from(vpn)) {
-                return -1;
-            }
-        }
-        return length as isize;
-    }
-
-    pub fn munmap(&self, start: usize, len: usize) -> isize {
-        if len == 0 {
-            return 0;
-        }
-        if len > 1073741824{
-            return -1;
-        }
-        if start % 4096 != 0 {
-            return -1;
-        }
-        let mut length = len;
-        if len % 4096 != 0 {
-            length = len + (4096 - len % 4096);
-        }
-        let mut inner = self.inner.exclusive_access();
-        let current = inner.current_task;
-        let from:usize = start / 4096;
-        let to:usize = (start + length) / 4096;
-        for vpn in from..to {
-            if false == inner.tasks[current].memory_set.find_vpn(VirtPageNum::from(vpn)) {
-                return -1;
-            }
-        }
-
-        for vpn in from..to {
-            inner.tasks[current].memory_set.munmap(VirtPageNum::from(vpn));
-        }
-
-        for vpn in from..to {
-            if true == inner.tasks[current].memory_set.find_vpn(VirtPageNum::from(vpn)) {
-                return -1;
-            }
-        }
-
-        return len as isize;
-    }
-
+    /// lab4 add
     fn task_map(&self, start: usize, len: usize, port: usize) -> isize {
         if start & (PAGE_SIZE - 1) != 0 {
             println!(
@@ -306,6 +222,17 @@ impl TaskManager {
         0
     }
 
+    fn current_memory_set_munmap(&self, start_va: VirtAddr, end_va: VirtAddr) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let current_task = inner.current_task;
+        inner.tasks[current_task].memory_set.remove_mapped_frames(start_va, end_va)
+    }
+
+    fn get_current_id(&self) -> usize {
+        let inner = self.inner.exclusive_access();
+        inner.current_task
+    }
+
     fn task_munmap(&self, start: usize, len: usize) -> isize {
         if start & (PAGE_SIZE - 1) != 0 {
             println!(
@@ -339,53 +266,28 @@ impl TaskManager {
         
         0
     }
-
-    fn current_memory_set_mmap(&self, start_va: VirtAddr, end_va: VirtAddr, permission: MapPermission) -> Result<(), &'static str > {
-        let mut inner = self.inner.exclusive_access();
-        let current_task = inner.current_task;
-        inner.tasks[current_task].memory_set.insert_framed_area(start_va, end_va, permission);
-        Ok(())
-    }
-
-    fn current_memory_set_munmap(&self, start_va: VirtAddr, end_va: VirtAddr) -> isize {
-        let mut inner = self.inner.exclusive_access();
-        let current_task = inner.current_task;
-        inner.tasks[current_task].memory_set.remove_mapped_frames(start_va, end_va)
-    }
-
-    fn get_current_id(&self) -> usize {
-        let inner = self.inner.exclusive_access();
-        inner.current_task
-    }
 }
 
-pub fn task_map(start: usize, len: usize, port: usize) -> isize{
-    TASK_MANAGER.task_map(start, len, port)
+pub fn task_munmap(start: usize, len: usize) -> isize{
+    TASK_MANAGER.task_munmap(start, len)
 }
-
+/// lab4 add
 pub fn current_id() -> usize {
     TASK_MANAGER.get_current_id()
 }
-
-pub fn current_memory_set_mmap(start_va: VirtAddr, end_va: VirtAddr, permission: MapPermission) -> Result<(), &'static str > {
-    TASK_MANAGER.current_memory_set_mmap(start_va, end_va, permission)
-}
-
+/// lab4 add
 pub fn current_memory_set_munmap(start_va: VirtAddr, end_va: VirtAddr) -> isize {
     TASK_MANAGER.current_memory_set_munmap(start_va, end_va)
 }
-pub fn mmap(start: usize, len: usize, port: usize) -> isize {
-    TASK_MANAGER.mmap(start, len, port)
+/// lab4 add
+pub fn task_map(start: usize, len: usize, port: usize) -> isize{
+    TASK_MANAGER.task_map(start, len, port)
 }
-
-pub fn munmap(start: usize, len: usize) -> isize {
-    TASK_MANAGER.munmap(start, len)
-}
-
+/// lab3
 pub fn record_syscall(syscall_id: usize) {
     TASK_MANAGER.set_syscall_times(syscall_id);
 }
-
+/// lab3 
 pub fn get_task_info(ti: *mut TaskInfo) {
     TASK_MANAGER.get_current_task_info(ti);
 }

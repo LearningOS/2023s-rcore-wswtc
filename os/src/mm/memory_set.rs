@@ -262,16 +262,16 @@ impl MemorySet {
             false
         }
     }
-    /// lab4 add
-    pub fn find_vpn(&self, vpn: VirtPageNum) -> bool{
-        self.page_table.find_vpn(vpn)
-    }
+    // /// lab4 add
+    // pub fn find_vpn(&self, vpn: VirtPageNum) -> bool{
+    //     self.page_table.find_vpn(vpn)
+    // }
     /// lab4 add
     pub fn munmap(&mut self, vpn: VirtPageNum){
         self.areas[0].unmap_one(&mut self.page_table, vpn);
     }
-
-    // TODO improve bruteforce munmap add
+    /// lab4 add
+    /// TODO improve bruteforce munmap add
     pub fn remove_mapped_frames(&mut self, start_va: VirtAddr, end_va: VirtAddr) -> isize {
         // make sure the vpn is belong to current MemorySet
         for vpn in VPNRange::new(start_va.floor(), end_va.ceil()) {
@@ -440,4 +440,3 @@ pub fn remap_test() {
         .executable(),);
     println!("remap_test passed!");
 }
-

@@ -8,7 +8,7 @@ const VA_WIDTH_SV39: usize = 39;
 const PPN_WIDTH_SV39: usize = PA_WIDTH_SV39 - PAGE_SIZE_BITS;
 const VPN_WIDTH_SV39: usize = VA_WIDTH_SV39 - PAGE_SIZE_BITS;
 use core::ops::Sub;
-
+/// lab4 add
 impl Sub<usize> for VirtPageNum {
     type Output = VirtPageNum;
 
@@ -133,31 +133,7 @@ impl From<VirtPageNum> for VirtAddr {
         Self(v.0 << PAGE_SIZE_BITS)
     }
 }
-// 实现 BitOr trait
-impl core::ops::BitOr<usize> for PhysPageNum {
-    type Output = PhysPageNum;
-
-    fn bitor(self, rhs: usize) -> Self::Output {
-        PhysPageNum(self.0 | rhs)
-    }
-}
-// 实现 Shl trait
-impl core::ops::Shl<usize> for PhysPageNum {
-    type Output = PhysPageNum;
-
-    fn shl(self, rhs: usize) -> Self::Output {
-        PhysPageNum(self.0 << rhs)
-    }
-}
 impl PhysAddr {
-    ///lab4
-    pub fn combine(ppn: PhysPageNum, offset: usize) -> PhysAddr {
-        // 
-        let phys_addr = (ppn<< 12) | offset;
-        let value: usize = usize::from(phys_addr);
-        PhysAddr(value)
-    }
-
     /// Get the (floor) physical page number
     pub fn floor(&self) -> PhysPageNum {
         PhysPageNum(self.0 / PAGE_SIZE)
@@ -186,7 +162,22 @@ impl From<PhysPageNum> for PhysAddr {
         Self(v.0 << PAGE_SIZE_BITS)
     }
 }
+/// lab4 实现 BitOr trait
+impl core::ops::BitOr<usize> for PhysPageNum {
+    type Output = PhysPageNum;
 
+    fn bitor(self, rhs: usize) -> Self::Output {
+        PhysPageNum(self.0 | rhs)
+    }
+}
+/// lab4 实现 Shl trait
+impl core::ops::Shl<usize> for PhysPageNum {
+    type Output = PhysPageNum;
+
+    fn shl(self, rhs: usize) -> Self::Output {
+        PhysPageNum(self.0 << rhs)
+    }
+}
 impl VirtPageNum {
     /// Get the indexes of the page table entry
     pub fn indexes(&self) -> [usize; 3] {
@@ -201,6 +192,14 @@ impl VirtPageNum {
 }
 
 impl PhysAddr {
+    /// lab4
+    pub fn combine(ppn: PhysPageNum, offset: usize) -> PhysAddr {
+        // 
+        let phys_addr = (ppn<< 12) | offset;
+        let value: usize = usize::from(phys_addr);
+        PhysAddr(value)
+    }
+
     ///Get mutable reference to `PhysAddr` value
     /// Get the mutable reference of physical address
     pub fn get_mut<T>(&self) -> &'static mut T {
