@@ -1,0 +1,797 @@
+diff --git a/.github/workflows/build.yml b/.github/workflows/build.yml
+index 2a19fde..2891bcd 100644
+--- a/.github/workflows/build.yml
++++ b/.github/workflows/build.yml
+@@ -7,23 +7,6 @@ env:
+   rust_toolchain: nightly-2022-08-05
+ 
+ jobs:
+-  build-doc:
+-    if: github.repository == 'LearningOS/rCore-Tutorial-Code-2023S'
+-    runs-on: ubuntu-latest
+-    steps:
+-      - uses: actions/checkout@v2
+-      - name: Build doc
+-        run: |
+-          git clone https://github.com/LearningOS/rCore-Tutorial-Test-2023S.git user
+-          cd os
+-          make
+-          cargo doc --no-deps --verbose
+-      - name: Push to gh-pages
+-        uses: peaceiris/actions-gh-pages@v3
+-        with:
+-          github_token: ${{ secrets.GITHUB_TOKEN }}
+-          publish_dir: ./os/target/riscv64gc-unknown-none-elf/doc
+-          destination_dir: ${{ github.ref_name }}
+   basic-test:
+     runs-on: ubuntu-latest
+     outputs:
+@@ -36,53 +19,8 @@ jobs:
+         run: |
+           qemu-system-riscv64 --version
+           rustup target add riscv64gc-unknown-none-elf
+-          git config --global --add safe.directory /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}
++          git config --global --add safe.directory /__w/rCore-Tutorial-Code-2023S/rCore-Tutorial-Code-2023S
+           git clone https://github.com/LearningOS/rCore-Tutorial-Checker-2023S.git ci-user
+           git clone https://github.com/LearningOS/rCore-Tutorial-Test-2023S.git ci-user/user
+           ID=`git rev-parse --abbrev-ref HEAD | grep -oP 'ch\K[0-9]'`
+-          cd ci-user && make test CHAPTER=$ID passwd=${{ secrets.BASE_TEST_TOKEN }} > ../output.txt
+-          cat ../output.txt
+-      - name: end
+-        id: end
+-        run: |
+-          cat output.txt | grep -a "Test passed" | grep -oP "\d{1,}/\d{1,}" | xargs -i echo "points={}"
+-          cat output.txt | grep -a "Test passed" | grep -oP "\d{1,}/\d{1,}" | xargs -i echo "points={}" >> $GITHUB_OUTPUT
+-  gitlab-mirror:
+-    if: github.repository == 'LearningOS/rCore-Tutorial-Code-2023S'
+-    runs-on: ubuntu-latest
+-    steps:
+-    - uses: actions/checkout@v1
+-    - name: Mirror + trigger CI
+-      uses: Gallium70/gitlab-mirror-and-ci-action@master
+-      with:
+-        args: "https://git.tsinghua.edu.cn/os-lab/2023s/public/rcore-tutorial-code-2023s"
+-      env:
+-        GITLAB_HOSTNAME: "git.tsinghua.edu.cn"
+-        GITLAB_PROJECT_ID: "20881"
+-        GITLAB_PROJECT_NAME: "rcore-tutorial-code-2023s"
+-        GITLAB_PROJECT_TOKEN: ${{ secrets.GITLAB_PROJECT_TOKEN }}
+-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+-  deploy:
+-    if: github.repository != 'LearningOS/rCore-Tutorial-Code-2023S'
+-    name: Deploy to pages
+-    needs: basic-test
+-    runs-on: ubuntu-latest
+-    permissions: write-all
+-    steps:
+-      - uses: actions/checkout@v3
+-        continue-on-error: true
+-        with:
+-          ref: 'gh-pages'
+-      - name: Save Log File
+-        uses: yfblock/multi-rank-log@main
+-        with:
+-          public-dir: classroom
+-          points: ${{ needs.basic-test.outputs.points }}
+-      - name: GitHub Pages
+-        uses: crazy-max/ghaction-github-pages@v3
+-        with:
+-          target_branch: gh-pages
+-          build_dir: ./classroom
+-          keep_history: true
+-        env:
+-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++          cd ci-user && make test CHAPTER=$ID passwd=${{ secrets.BASE_TEST_TOKEN }}
+\ No newline at end of file
+diff --git a/ci-user b/ci-user
+deleted file mode 160000
+index d1b2a64..0000000
+--- a/ci-user
++++ /dev/null
+@@ -1 +0,0 @@
+-Subproject commit d1b2a64e8454e09d4d9e672311f8c913b6e5c0ca
+diff --git a/os/Makefile b/os/Makefile
+index 4f2a794..b02dbf3 100644
+--- a/os/Makefile
++++ b/os/Makefile
+@@ -2,23 +2,79 @@
+ TARGET := riscv64gc-unknown-none-elf
+ MODE := release
+ KERNEL_ELF := target/$(TARGET)/$(MODE)/os
++KERNEL_BIN := $(KERNEL_ELF).bin
++DISASM_TMP := target/$(TARGET)/$(MODE)/asm
+ 
+ # BOARD
+-BOARD ?= qemu
++BOARD := qemu
+ SBI ?= rustsbi
+ BOOTLOADER := ../bootloader/$(SBI)-$(BOARD).bin
+ 
++# Building mode argument
++ifeq ($(MODE), release)
++	MODE_ARG := --release
++endif
++
++# KERNEL ENTRY
++KERNEL_ENTRY_PA := 0x80200000
++
++# Binutils
++OBJDUMP := rust-objdump --arch-name=riscv64
++OBJCOPY := rust-objcopy --binary-architecture=riscv64
++
++CHAPTER ?= $(shell git rev-parse --abbrev-ref HEAD | grep -oP 'ch\K[0-9]')
++TEST ?= $(CHAPTER)
++BASE ?= 1
++
++# Disassembly
++DISASM ?= -x
++
++build: env $(KERNEL_BIN)
++
++env:
++	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
++	cargo install cargo-binutils
++	rustup component add rust-src
++	rustup component add llvm-tools-preview
++
++$(KERNEL_BIN): kernel
++	@$(OBJCOPY) $(KERNEL_ELF) --strip-all -O binary $@
++
+ kernel:
+-	cargo build --release
++	@make -C ../user build TEST=$(TEST) CHAPTER=$(CHAPTER) BASE=$(BASE)
++	@echo Platform: $(BOARD)
++	@cargo build $(MODE_ARG)
+ 
+ clean:
+-	cargo clean
++	@cargo clean
++
++disasm: kernel
++	@$(OBJDUMP) $(DISASM) $(KERNEL_ELF) | less
++
++disasm-vim: kernel
++	@$(OBJDUMP) $(DISASM) $(KERNEL_ELF) > $(DISASM_TMP)
++	@vim $(DISASM_TMP)
++	@rm $(DISASM_TMP)
++
++run: run-inner
+ 
+-run: kernel
+-	timeout --foreground 300s qemu-system-riscv64 \
++run-inner: build
++	@qemu-system-riscv64 \
+ 		-machine virt \
+ 		-nographic \
+ 		-bios $(BOOTLOADER) \
+-		-kernel $(KERNEL_ELF)
++		-device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY_PA)
++
++debug: build
++	@tmux new-session -d \
++		"qemu-system-riscv64 -machine virt -nographic -bios $(BOOTLOADER) -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY_PA) -s -S" && \
++		tmux split-window -h "riscv64-unknown-elf-gdb -ex 'file $(KERNEL_ELF)' -ex 'set arch riscv:rv64' -ex 'target remote localhost:1234'" && \
++		tmux -2 attach-session -d
++
++gdbserver: build
++	@qemu-system-riscv64 -machine virt -nographic -bios $(BOOTLOADER) -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY_PA) -s -S
++
++gdbclient:
++	@riscv64-unknown-elf-gdb -ex 'file $(KERNEL_ELF)' -ex 'set arch riscv:rv64' -ex 'target remote localhost:1234'
+ 
+-.PHONY: build kernel clean run
++.PHONY: build env kernel clean disasm disasm-vim run-inner gdbserver gdbclient
+diff --git a/os/build.rs b/os/build.rs
+index 2eac708..63845c7 100644
+--- a/os/build.rs
++++ b/os/build.rs
+@@ -1,17 +1,20 @@
++//! Building applications linker
++
++use std::fs::{read_dir, File};
+ use std::io::{Result, Write};
+-use std::fs::{File, read_dir};
+ 
+ fn main() {
+-    println!("cargo:rerun-if-changed=../ci-user/user/src/");
++    println!("cargo:rerun-if-changed=../user/src/");
+     println!("cargo:rerun-if-changed={}", TARGET_PATH);
+     insert_app_data().unwrap();
+ }
+ 
+-static TARGET_PATH: &str = "../ci-user/user/build/elf/";
++static TARGET_PATH: &str = "../user/build/elf/";
+ 
++/// get app data and build linker
+ fn insert_app_data() -> Result<()> {
+     let mut f = File::create("src/link_app.S").unwrap();
+-    let mut apps: Vec<_> = read_dir("../ci-user/user/build/elf")
++    let mut apps: Vec<_> = read_dir("../user/build/elf/")
+         .unwrap()
+         .into_iter()
+         .map(|dir_entry| {
+@@ -22,35 +25,36 @@ fn insert_app_data() -> Result<()> {
+         .collect();
+     apps.sort();
+ 
+-    writeln!(f, r#"
++    writeln!(
++        f,
++        r#"
+     .align 3
+     .section .data
+     .global _num_app
+ _num_app:
+-    .quad {}"#, apps.len())?;
++    .quad {}"#,
++        apps.len()
++    )?;
+ 
+     for i in 0..apps.len() {
+         writeln!(f, r#"    .quad app_{}_start"#, i)?;
+     }
+     writeln!(f, r#"    .quad app_{}_end"#, apps.len() - 1)?;
+ 
+-    writeln!(f, r#"
+-    .global _app_names
+-_app_names:"#)?;
+-    for app in apps.iter() {
+-        writeln!(f, r#"    .string "{}""#, app)?;
+-    }
+-
+     for (idx, app) in apps.iter().enumerate() {
+         println!("app_{}: {}", idx, app);
+-        writeln!(f, r#"
++        writeln!(
++            f,
++            r#"
+     .section .data
+     .global app_{0}_start
+     .global app_{0}_end
+     .align 3
+ app_{0}_start:
+     .incbin "{2}{1}.elf"
+-app_{0}_end:"#, idx, app, TARGET_PATH)?;
++app_{0}_end:"#,
++            idx, app, TARGET_PATH
++        )?;
+     }
+     Ok(())
+ }
+diff --git a/os/src/main.rs b/os/src/main.rs
+index 18af2e4..d79e798 100644
+--- a/os/src/main.rs
++++ b/os/src/main.rs
+@@ -15,8 +15,8 @@
+ //! We then call [`task::run_first_task()`] and for the first time go to
+ //! userspace.
+ 
+-//#![deny(missing_docs)]
+-//#![deny(warnings)]
++#![deny(missing_docs)]
++#![deny(warnings)]
+ #![no_std]
+ #![no_main]
+ #![feature(panic_info_message)]
+diff --git a/os/src/mm/address.rs b/os/src/mm/address.rs
+index 964ffb3..59a6acf 100644
+--- a/os/src/mm/address.rs
++++ b/os/src/mm/address.rs
+@@ -7,15 +7,7 @@ const PA_WIDTH_SV39: usize = 56;
+ const VA_WIDTH_SV39: usize = 39;
+ const PPN_WIDTH_SV39: usize = PA_WIDTH_SV39 - PAGE_SIZE_BITS;
+ const VPN_WIDTH_SV39: usize = VA_WIDTH_SV39 - PAGE_SIZE_BITS;
+-use core::ops::Sub;
+-/// lab4 add
+-impl Sub<usize> for VirtPageNum {
+-    type Output = VirtPageNum;
+ 
+-    fn sub(self, rhs: usize) -> VirtPageNum {
+-        VirtPageNum(self.0 - rhs)
+-    }
+-}
+ /// physical address
+ #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+ pub struct PhysAddr(pub usize);
+@@ -162,22 +154,7 @@ impl From<PhysPageNum> for PhysAddr {
+         Self(v.0 << PAGE_SIZE_BITS)
+     }
+ }
+-/// lab4 实现 BitOr trait
+-impl core::ops::BitOr<usize> for PhysPageNum {
+-    type Output = PhysPageNum;
+-
+-    fn bitor(self, rhs: usize) -> Self::Output {
+-        PhysPageNum(self.0 | rhs)
+-    }
+-}
+-/// lab4 实现 Shl trait
+-impl core::ops::Shl<usize> for PhysPageNum {
+-    type Output = PhysPageNum;
+ 
+-    fn shl(self, rhs: usize) -> Self::Output {
+-        PhysPageNum(self.0 << rhs)
+-    }
+-}
+ impl VirtPageNum {
+     /// Get the indexes of the page table entry
+     pub fn indexes(&self) -> [usize; 3] {
+@@ -192,14 +169,6 @@ impl VirtPageNum {
+ }
+ 
+ impl PhysAddr {
+-    /// lab4
+-    pub fn combine(ppn: PhysPageNum, offset: usize) -> PhysAddr {
+-        // 
+-        let phys_addr = (ppn<< 12) | offset;
+-        let value: usize = usize::from(phys_addr);
+-        PhysAddr(value)
+-    }
+-
+     ///Get mutable reference to `PhysAddr` value
+     /// Get the mutable reference of physical address
+     pub fn get_mut<T>(&self) -> &'static mut T {
+diff --git a/os/src/mm/memory_set.rs b/os/src/mm/memory_set.rs
+index 8357cbc..7a7b7ea 100644
+--- a/os/src/mm/memory_set.rs
++++ b/os/src/mm/memory_set.rs
+@@ -262,36 +262,6 @@ impl MemorySet {
+             false
+         }
+     }
+-    // /// lab4 add
+-    // pub fn find_vpn(&self, vpn: VirtPageNum) -> bool{
+-    //     self.page_table.find_vpn(vpn)
+-    // }
+-    /// lab4 add
+-    pub fn munmap(&mut self, vpn: VirtPageNum){
+-        self.areas[0].unmap_one(&mut self.page_table, vpn);
+-    }
+-    /// lab4 add
+-    /// TODO improve bruteforce munmap add
+-    pub fn remove_mapped_frames(&mut self, start_va: VirtAddr, end_va: VirtAddr) -> isize {
+-        // make sure the vpn is belong to current MemorySet
+-        for vpn in VPNRange::new(start_va.floor(), end_va.ceil()) {
+-            if let None = self.areas.iter()
+-            .position(|area| area.data_frames.contains_key(&vpn)) {
+-                return -1;
+-            }
+-        }
+-        // drop the MapAreas in a bruteforce way
+-        for vpn in VPNRange::new(start_va.floor(), end_va.ceil())  {
+-            let index = self.areas.iter()
+-                .position(|area| area.data_frames.contains_key(&vpn)).unwrap();
+-            self.areas[index].unmap_one(&mut self.page_table, vpn);
+-            self.areas[index].data_frames.remove(&vpn);
+-            if self.areas[index].data_frames.is_empty() {
+-                self.areas.remove(index);
+-            }
+-        }
+-        0
+-    }
+ }
+ /// map area structure, controls a contiguous piece of virtual memory
+ pub struct MapArea {
+diff --git a/os/src/mm/mod.rs b/os/src/mm/mod.rs
+index bb83101..06f045c 100644
+--- a/os/src/mm/mod.rs
++++ b/os/src/mm/mod.rs
+@@ -9,11 +9,11 @@
+ mod address;
+ mod frame_allocator;
+ mod heap_allocator;
+-pub mod memory_set;
+-pub mod page_table;
++mod memory_set;
++mod page_table;
+ 
+ pub use address::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
+-pub use address::{StepByOne, VPNRange};
++use address::{StepByOne, VPNRange};
+ pub use frame_allocator::{frame_alloc, FrameTracker};
+ pub use memory_set::remap_test;
+ pub use memory_set::{kernel_stack_position, MapPermission, MemorySet, KERNEL_SPACE};
+diff --git a/os/src/mm/page_table.rs b/os/src/mm/page_table.rs
+index 230a326..7946e33 100644
+--- a/os/src/mm/page_table.rs
++++ b/os/src/mm/page_table.rs
+@@ -147,13 +147,6 @@ impl PageTable {
+     pub fn token(&self) -> usize {
+         8usize << 60 | self.root_ppn.0
+     }
+-    // /// lab4 add
+-    // pub fn find_vpn(&self, vpn: VirtPageNum) -> bool{
+-    //     match self.find_pte(vpn){
+-    //         None => false,
+-    //         Some(x)=> x.is_valid(),
+-    //     }
+-    // } 
+ }
+ 
+ /// Translate&Copy a ptr[u8] array with LENGTH len to a mutable u8 Vec through page table
+diff --git a/os/src/syscall/mod.rs b/os/src/syscall/mod.rs
+index df30b8a..4a5297d 100644
+--- a/os/src/syscall/mod.rs
++++ b/os/src/syscall/mod.rs
+@@ -26,15 +26,12 @@ const SYSCALL_MMAP: usize = 222;
+ const SYSCALL_TASK_INFO: usize = 410;
+ 
+ mod fs;
+-pub mod process;
++mod process;
+ 
+ use fs::*;
+ use process::*;
+-
+-use crate::task::record_syscall;
+ /// handle syscall exception with `syscall_id` and other arguments
+ pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {
+-    record_syscall(syscall_id);// lab3 add
+     match syscall_id {
+         SYSCALL_WRITE => sys_write(args[0], args[1] as *const u8, args[2]),
+         SYSCALL_EXIT => sys_exit(args[0] as i32),
+diff --git a/os/src/syscall/process.rs b/os/src/syscall/process.rs
+index ca42cd4..e2f6662 100644
+--- a/os/src/syscall/process.rs
++++ b/os/src/syscall/process.rs
+@@ -2,37 +2,26 @@
+ use crate::{
+     config::MAX_SYSCALL_NUM,
+     task::{
+-        change_program_brk, exit_current_and_run_next, suspend_current_and_run_next, TaskStatus,current_memory_set_munmap,current_id,task_map,task_munmap
++        change_program_brk, exit_current_and_run_next, suspend_current_and_run_next, TaskStatus,
+     },
+ };
+-/// lab4 add
+-use crate::task::get_task_info;
+-pub use crate::mm::memory_set::MemorySet;
+-
+-use crate::mm::PhysAddr;
+-use crate::task::current_user_token;
+-use crate::mm::VirtAddr;
+-use crate::timer::get_time_ms;
+-use crate::mm::page_table::PageTable;
+-use crate::config::PAGE_SIZE;
+-use crate::mm::VPNRange;
+ 
+ #[repr(C)]
+ #[derive(Debug)]
+ pub struct TimeVal {
+     pub sec: usize,
+-    pub msec: usize,
++    pub usec: usize,
+ }
+ 
+ /// Task information
+ #[allow(dead_code)]
+ pub struct TaskInfo {
+     /// Task status in it's life cycle
+-    pub status: TaskStatus,
++    status: TaskStatus,
+     /// The numbers of syscall called by task
+-    pub syscall_times: [u32; MAX_SYSCALL_NUM],
++    syscall_times: [u32; MAX_SYSCALL_NUM],
+     /// Total running time of task
+-    pub time: usize,
++    time: usize,
+ }
+ 
+ /// task exits and submit an exit code
+@@ -54,20 +43,7 @@ pub fn sys_yield() -> isize {
+ /// HINT: What if [`TimeVal`] is splitted by two pages ?
+ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
+     trace!("kernel: sys_get_time");
+-    let virt_addr = VirtAddr(_ts as usize);
+-    if let Some(phys_addr) = virt2phys_addr(virt_addr) {
+-        let us = get_time_ms() + 1000;
+-        let kernel_ts = phys_addr.0 as *mut TimeVal;
+-        unsafe {
+-            *kernel_ts = TimeVal {
+-                sec: us / 1_000,
+-                msec: 1 + (us % 1_000),
+-            };
+-        }
+-        0
+-    } else {
+-        -1
+-    }
++    -1
+ }
+ 
+ /// YOUR JOB: Finish sys_task_info to pass testcases
+@@ -75,44 +51,19 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
+ /// HINT: What if [`TaskInfo`] is splitted by two pages ?
+ pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
+     trace!("kernel: sys_task_info NOT IMPLEMENTED YET!");
+-    let virt_addr = VirtAddr(_ti as usize);
+-    if let Some(phys_addr) = virt2phys_addr(virt_addr) {
+-        get_task_info(phys_addr.0 as *mut TaskInfo);
+-        0
+-    } else {
+-        -1
+-    }
++    -1
+ }
+ 
+ // YOUR JOB: Implement mmap.
+ pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
+     trace!("kernel: sys_mmap NOT IMPLEMENTED YET!");
+-    task_map(_start,_len,_port)
++    -1
+ }
+ 
+ // YOUR JOB: Implement munmap.
+-pub fn sys_munmap(start: usize, len: usize) -> isize {
++pub fn sys_munmap(_start: usize, _len: usize) -> isize {
+     trace!("kernel: sys_munmap NOT IMPLEMENTED YET!");
+-    // if (start & (PAGE_SIZE - 1)) != 0 {
+-    //     return -1;
+-    // }
+-
+-    // let len = ( (len + PAGE_SIZE - 1) / PAGE_SIZE ) * PAGE_SIZE;
+-    // let start_vpn =  VirtAddr::from(start).floor();
+-    // let end_vpn =  VirtAddr::from(start + len - 4095).floor();
+-    // println!("current_id is :{:?}   unmap startVPN is: {:?}",current_id(), start_vpn);
+-    // println!("current_id is :{:?}   unmap endVPN is: {:?}",current_id(), end_vpn);
+-    // let page_table_user = PageTable::from_token(current_user_token());
+-    // // make sure there are no unmapped pages in [start..start+len)
+-    // for vpn in VPNRange::new(start_vpn, end_vpn) {
+-    //     if let None = page_table_user.translate(vpn) {
+-    //         println!("there are no unmapped pages {:?}", vpn);
+-    //         return -1;
+-    //     }
+-    // }
+-    
+-    // current_memory_set_munmap( VirtAddr::from(start), VirtAddr::from(start + len))
+-    task_munmap(start,len)
++    -1
+ }
+ /// change data segment size
+ pub fn sys_sbrk(size: i32) -> isize {
+@@ -123,17 +74,3 @@ pub fn sys_sbrk(size: i32) -> isize {
+         -1
+     }
+ }
+-/// lab4add
+-fn virt2phys_addr(virt_addr: VirtAddr) -> Option<PhysAddr> {
+-    let offset = virt_addr.page_offset();
+-    let vpn = virt_addr.floor();
+-    let ppn = PageTable::from_token(current_user_token())
+-        .translate(vpn)
+-        .map(|entry| entry.ppn());
+-    if let Some(ppn) = ppn {
+-        Some(PhysAddr::combine(ppn, offset))
+-    } else {
+-        println!("virt2phys_addr() fail");
+-        None
+-    }
+-}
+\ No newline at end of file
+diff --git a/os/src/task/mod.rs b/os/src/task/mod.rs
+index f278777..a745df8 100644
+--- a/os/src/task/mod.rs
++++ b/os/src/task/mod.rs
+@@ -14,17 +14,6 @@ mod switch;
+ #[allow(clippy::module_inception)]
+ mod task;
+ 
+-use crate::mm::VPNRange;
+-//
+-use crate::timer::get_time_ms;
+-use crate::task::task::TaskInfoInner;
+-use crate::syscall::process::TaskInfo;
+-pub use crate::mm::memory_set::{kernel_stack_position, MapPermission, MemorySet, KERNEL_SPACE};
+-use crate::mm::VirtPageNum;
+-use crate::mm::VirtAddr;
+-use crate::config::PAGE_SIZE;
+-//use crate::mm::VPNRange;
+-//
+ use crate::loader::{get_app_data, get_num_app};
+ use crate::sync::UPSafeCell;
+ use crate::trap::TrapContext;
+@@ -164,133 +153,8 @@ impl TaskManager {
+             panic!("All applications completed!");
+         }
+     }
+-    /// lab4 add 
+-    fn set_syscall_times(&self, syscall_id: usize) {
+-        let mut inner = self.inner.exclusive_access();
+-        let current_id = inner.current_task;
+-        inner.tasks[current_id].task_info_inner.syscall_times[syscall_id] += 1;
+-    }
+-    /// lab4 add
+-    fn get_current_task_info(&self, ti: *mut TaskInfo) {
+-        let inner = self.inner.exclusive_access();
+-        let current_id = inner.current_task;
+-        let TaskInfoInner {syscall_times, start_time} = inner.tasks[current_id].task_info_inner;
+-
+-        unsafe {
+-            *ti = TaskInfo {
+-                status: TaskStatus::Running,
+-                syscall_times,
+-                time: get_time_ms() - start_time,
+-            };
+-        }
+-    }
+-    /// lab4 add
+-    fn task_map(&self, start: usize, len: usize, port: usize) -> isize {
+-        if start & (PAGE_SIZE - 1) != 0 {
+-            println!(
+-                "expect the start address to be aligned with a page, but get an invalid start: {:#x}",
+-                start
+-            );
+-            return -1;
+-        }
+-        // port最低三位[x w r]，其他位必须为0
+-        if port > 7usize || port == 0 {
+-            println!("invalid port: {:#b}", port);
+-            return -1;
+-        }
+-
+-        let mut inner = self.inner.exclusive_access();
+-        let task_id = inner.current_task;
+-        let current_task = &mut inner.tasks[task_id];
+-        let memory_set = &mut current_task.memory_set;
+-  
+-        // check valid
+-        let start_vpn = VirtPageNum::from(VirtAddr(start));
+-        let end_vpn = VirtPageNum::from(VirtAddr(start + len).ceil());
+-        for vpn in start_vpn.0 .. end_vpn.0 {
+-            if let Some(pte) = memory_set.translate(VirtPageNum(vpn)) {
+-                if pte.is_valid() {
+-                    println!("vpn {} has been occupied!", vpn);
+-                    return -1;
+-                }
+-            }
+-        }
+-
+-	// PTE_U 的语义是【用户能否访问该物理帧】
+-        let permission = MapPermission::from_bits((port as u8) << 1).unwrap() | MapPermission::U;
+-        memory_set.insert_framed_area(VirtAddr(start), VirtAddr(start+len), permission);
+-        0
+-    }
+-
+-    fn current_memory_set_munmap(&self, start_va: VirtAddr, end_va: VirtAddr) -> isize {
+-        let mut inner = self.inner.exclusive_access();
+-        let current_task = inner.current_task;
+-        inner.tasks[current_task].memory_set.remove_mapped_frames(start_va, end_va)
+-    }
+-
+-    fn get_current_id(&self) -> usize {
+-        let inner = self.inner.exclusive_access();
+-        inner.current_task
+-    }
+-
+-    fn task_munmap(&self, start: usize, len: usize) -> isize {
+-        if start & (PAGE_SIZE - 1) != 0 {
+-            println!(
+-                "expect the start address to be aligned with a page, but get an invalid start: {:#x}",
+-                start
+-            );
+-            return -1;
+-        }
+-      
+-        let mut inner = self.inner.exclusive_access();
+-        let task_id = inner.current_task;
+-        let current_task = &mut inner.tasks[task_id];
+-        let memory_set = &mut current_task.memory_set;
+-
+-        // check valid
+-        let start_vpn = VirtPageNum::from(VirtAddr(start));
+-        let end_vpn = VirtPageNum::from(VirtAddr(start + len).ceil());
+-        for vpn in start_vpn.0 .. end_vpn.0 {
+-            if let Some(pte) = memory_set.translate(VirtPageNum(vpn)) {
+-                if !pte.is_valid() {
+-                    println!("vpn {} is not valid before unmap", vpn);
+-                    return -1;
+-                }
+-            }
+-        }
+-      
+-        let vpn_range = VPNRange::new(start_vpn, end_vpn);
+-        for vpn in vpn_range {
+-            memory_set.munmap(vpn);
+-        }
+-        
+-        0
+-    }
+ }
+ 
+-pub fn task_munmap(start: usize, len: usize) -> isize{
+-    TASK_MANAGER.task_munmap(start, len)
+-}
+-/// lab4 add
+-pub fn current_id() -> usize {
+-    TASK_MANAGER.get_current_id()
+-}
+-/// lab4 add
+-pub fn current_memory_set_munmap(start_va: VirtAddr, end_va: VirtAddr) -> isize {
+-    TASK_MANAGER.current_memory_set_munmap(start_va, end_va)
+-}
+-/// lab4 add
+-pub fn task_map(start: usize, len: usize, port: usize) -> isize{
+-    TASK_MANAGER.task_map(start, len, port)
+-}
+-/// lab3
+-pub fn record_syscall(syscall_id: usize) {
+-    TASK_MANAGER.set_syscall_times(syscall_id);
+-}
+-/// lab3 
+-pub fn get_task_info(ti: *mut TaskInfo) {
+-    TASK_MANAGER.get_current_task_info(ti);
+-}
+ /// Run the first task in task list.
+ pub fn run_first_task() {
+     TASK_MANAGER.run_first_task();
+diff --git a/os/src/task/task.rs b/os/src/task/task.rs
+index b78e74b..dce6981 100644
+--- a/os/src/task/task.rs
++++ b/os/src/task/task.rs
+@@ -5,7 +5,7 @@ use crate::mm::{
+     kernel_stack_position, MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE,
+ };
+ use crate::trap::{trap_handler, TrapContext};
+-use crate::config::MAX_SYSCALL_NUM;
++
+ /// The task control block (TCB) of a task.
+ pub struct TaskControlBlock {
+     /// Save task context
+@@ -28,9 +28,6 @@ pub struct TaskControlBlock {
+ 
+     /// Program break
+     pub program_brk: usize,
+-
+-    /// lab3 add
+-    pub task_info_inner: TaskInfoInner,
+ }
+ 
+ impl TaskControlBlock {
+@@ -58,11 +55,6 @@ impl TaskControlBlock {
+             kernel_stack_top.into(),
+             MapPermission::R | MapPermission::W,
+         );
+-        // lab4 add
+-        let task_info = TaskInfoInner {
+-            syscall_times: [0; MAX_SYSCALL_NUM],
+-            start_time:0,
+-        };
+         let task_control_block = Self {
+             task_status,
+             task_cx: TaskContext::goto_trap_return(kernel_stack_top),
+@@ -71,7 +63,6 @@ impl TaskControlBlock {
+             base_size: user_sp,
+             heap_bottom: user_sp,
+             program_brk: user_sp,
+-            task_info_inner: task_info,
+         };
+         // prepare TrapContext in user space
+         let trap_cx = task_control_block.get_trap_cx();
+@@ -107,13 +98,6 @@ impl TaskControlBlock {
+     }
+ }
+ 
+-///lab3 add
+-#[derive(Copy, Clone)]
+-pub struct TaskInfoInner{
+-    pub syscall_times:[u32; MAX_SYSCALL_NUM],
+-    pub start_time: usize,
+-}
+-
+ #[derive(Copy, Clone, PartialEq)]
+ /// task status: UnInit, Ready, Running, Exited
+ pub enum TaskStatus {
+diff --git a/reports/lab_note.md b/reports/lab_note.md
+deleted file mode 100644
+index 5feb588..0000000
+--- a/reports/lab_note.md
++++ /dev/null
+@@ -1 +0,0 @@
+-ce shi
+\ No newline at end of file
+diff --git a/user b/user
+deleted file mode 160000
+index 056f012..0000000
+--- a/user
++++ /dev/null
+@@ -1 +0,0 @@
+-Subproject commit 056f01254facf0e179c524cbcc2a32f04e720e89

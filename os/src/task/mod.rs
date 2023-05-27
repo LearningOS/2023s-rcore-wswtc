@@ -187,15 +187,15 @@ impl TaskManager {
     /// lab4 add
     fn task_map(&self, start: usize, len: usize, port: usize) -> isize {
         if start & (PAGE_SIZE - 1) != 0 {
-            println!(
-                "expect the start address to be aligned with a page, but get an invalid start: {:#x}",
-                start
-            );
+            // println!(
+            //     "expect the start address to be aligned with a page, but get an invalid start: {:#x}",
+            //     start
+            // );
             return -1;
         }
         // port最低三位[x w r]，其他位必须为0
         if port > 7usize || port == 0 {
-            println!("invalid port: {:#b}", port);
+            //println!("invalid port: {:#b}", port);
             return -1;
         }
 
@@ -210,7 +210,7 @@ impl TaskManager {
         for vpn in start_vpn.0 .. end_vpn.0 {
             if let Some(pte) = memory_set.translate(VirtPageNum(vpn)) {
                 if pte.is_valid() {
-                    println!("vpn {} has been occupied!", vpn);
+                    //println!("vpn {} has been occupied!", vpn);
                     return -1;
                 }
             }
@@ -235,10 +235,10 @@ impl TaskManager {
 
     fn task_munmap(&self, start: usize, len: usize) -> isize {
         if start & (PAGE_SIZE - 1) != 0 {
-            println!(
-                "expect the start address to be aligned with a page, but get an invalid start: {:#x}",
-                start
-            );
+            // println!(
+            //     "expect the start address to be aligned with a page, but get an invalid start: {:#x}",
+            //     start
+            // );
             return -1;
         }
       
@@ -253,7 +253,7 @@ impl TaskManager {
         for vpn in start_vpn.0 .. end_vpn.0 {
             if let Some(pte) = memory_set.translate(VirtPageNum(vpn)) {
                 if !pte.is_valid() {
-                    println!("vpn {} is not valid before unmap", vpn);
+                    //println!("vpn {} is not valid before unmap", vpn);
                     return -1;
                 }
             }

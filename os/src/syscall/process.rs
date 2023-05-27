@@ -74,7 +74,7 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
 /// HINT: You might reimplement it with virtual memory management.
 /// HINT: What if [`TaskInfo`] is splitted by two pages ?
 pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
-    trace!("kernel: sys_task_info NOT IMPLEMENTED YET!");
+    //trace!("kernel: sys_task_info NOT IMPLEMENTED YET!");
     let virt_addr = VirtAddr(_ti as usize);
     if let Some(phys_addr) = virt2phys_addr(virt_addr) {
         get_task_info(phys_addr.0 as *mut TaskInfo);
@@ -86,13 +86,13 @@ pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
 
 // YOUR JOB: Implement mmap.
 pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
-    trace!("kernel: sys_mmap NOT IMPLEMENTED YET!");
+    //trace!("kernel: sys_mmap NOT IMPLEMENTED YET!");
     task_map(_start,_len,_port)
 }
 
 // YOUR JOB: Implement munmap.
 pub fn sys_munmap(start: usize, len: usize) -> isize {
-    trace!("kernel: sys_munmap NOT IMPLEMENTED YET!");
+    //trace!("kernel: sys_munmap NOT IMPLEMENTED YET!");
     // if (start & (PAGE_SIZE - 1)) != 0 {
     //     return -1;
     // }
@@ -133,7 +133,7 @@ fn virt2phys_addr(virt_addr: VirtAddr) -> Option<PhysAddr> {
     if let Some(ppn) = ppn {
         Some(PhysAddr::combine(ppn, offset))
     } else {
-        println!("virt2phys_addr() fail");
+        //println!("virt2phys_addr() fail");
         None
     }
 }
