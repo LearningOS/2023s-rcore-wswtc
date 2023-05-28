@@ -53,7 +53,7 @@ pub fn sys_yield() -> isize {
 /// HINT: You might reimplement it with virtual memory management.
 /// HINT: What if [`TimeVal`] is splitted by two pages ?
 pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
-    trace!("kernel: sys_get_time");
+    //trace!("kernel: sys_get_time");
     let virt_addr = VirtAddr(_ts as usize);
     if let Some(phys_addr) = virt2phys_addr(virt_addr) {
         let us = get_time_ms() + 1000;
@@ -74,7 +74,6 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
 /// HINT: You might reimplement it with virtual memory management.
 /// HINT: What if [`TaskInfo`] is splitted by two pages ?
 pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
-    //trace!("kernel: sys_task_info NOT IMPLEMENTED YET!");
     let virt_addr = VirtAddr(_ti as usize);
     if let Some(phys_addr) = virt2phys_addr(virt_addr) {
         get_task_info(phys_addr.0 as *mut TaskInfo);
@@ -86,7 +85,7 @@ pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
 
 // YOUR JOB: Implement mmap.
 pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
-    //trace!("kernel: sys_mmap NOT IMPLEMENTED YET!");
+    
     task_map(_start,_len,_port)
 }
 

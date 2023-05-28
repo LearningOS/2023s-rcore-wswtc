@@ -210,7 +210,7 @@ impl TaskManager {
         for vpn in start_vpn.0 .. end_vpn.0 {
             if let Some(pte) = memory_set.translate(VirtPageNum(vpn)) {
                 if pte.is_valid() {
-                    //println!("vpn {} has been occupied!", vpn);
+                    
                     return -1;
                 }
             }
